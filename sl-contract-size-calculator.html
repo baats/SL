@@ -1,0 +1,59 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SL Contract Size Calculator</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 400px; margin: 2em auto; padding: 1em; background: #f9f9f9; }
+  input, button { padding: 0.6em; margin: 0.5em 0; width: 100%; font-size: 1em; }
+  h1 { text-align: center; }
+  .result { margin-top: 1em; font-weight: bold; font-size: 1.3em; }
+</style>
+</head>
+<body>
+
+<h1>SL Contract Size Calculator</h1>
+
+<label for="maxRisk">Max Risk ($):</label>
+<input type="number" id="maxRisk" min="1" placeholder="Enter max risk amount" />
+
+<label for="slPoints">Stop Loss (points):</label>
+<input type="number" id="slPoints" min="0.1" step="0.1" placeholder="Enter stop loss points" />
+
+<label for="pointValue">Point Value ($ per point):</label>
+<input type="number" id="pointValue" min="0.01" step="0.01" placeholder="Enter point value" value="20" />
+
+<button onclick="calculateContractSize()">Calculate Contract Size</button>
+
+<div class="result" id="result"></div>
+
+<script>
+  function calculateContractSize() {
+    const maxRisk = Number(document.getElementById('maxRisk').value);
+    const slPoints = Number(document.getElementById('slPoints').value);
+    const pointValue = Number(document.getElementById('pointValue').value);
+
+    if (maxRisk <= 0 || slPoints <= 0 || pointValue <= 0) {
+      document.getElementById('result').innerText = 'Please enter valid positive numbers.';
+      return;
+    }
+
+    const maxContracts = Math.floor(maxRisk / (slPoints * pointValue));
+    const riskUsed = maxContracts * slPoints * pointValue;
+
+    if (maxContracts < 1) {
+      document.getElementById('result').innerText = 'Risk or SL too low for even 1 contract.';
+      return;
+    }
+
+    document.getElementById('result').innerHTML = `
+      Max Contract Size: <strong>${maxContracts}</strong><br/>
+      Total Risk at SL: $${riskUsed.toFixed(2)}
+    `;
+  }
+</script>
+
+</body>
+</html>
