@@ -184,40 +184,15 @@ if (projectionUpdated or barstate.islast) and not na(selectedRatio) and not na(l
             // Delete old box and create new one
             if not na(projectionBox)
                 box.delete(projectionBox)
-            projectionBox := box.new(
-                left=bar_index,
-                top=retracementHigh,
-                right=bar_index + 50,
-                bottom=retracementLow,
-                border_color=projectionColor,
-                bgcolor=projectionColor,
-                border_width=1,
-                extend=extend.right
-            )
+            projectionBox := box.new(bar_index, retracementHigh, bar_index + 50, retracementLow, border_color=projectionColor, bgcolor=projectionColor, border_width=1, extend=extend.right)
         else
             // Delete old lines and create new ones
             if not na(upperLine)
                 line.delete(upperLine)
             if not na(lowerLine)
                 line.delete(lowerLine)
-            upperLine := line.new(
-                x1=bar_index,
-                y1=retracementHigh,
-                x2=bar_index + 50,
-                y2=retracementHigh,
-                color=projectionColor,
-                width=2,
-                extend=extend.right
-            )
-            lowerLine := line.new(
-                x1=bar_index,
-                y1=retracementLow,
-                x2=bar_index + 50,
-                y2=retracementLow,
-                color=projectionColor,
-                width=2,
-                extend=extend.right
-            )
+            upperLine := line.new(bar_index, retracementHigh, bar_index + 50, retracementHigh, color=projectionColor, width=2, extend=extend.right)
+            lowerLine := line.new(bar_index, retracementLow, bar_index + 50, retracementLow, color=projectionColor, width=2, extend=extend.right)
 
         // Create/update label
         ratioPercent = selectedRatio * 100
@@ -225,15 +200,7 @@ if (projectionUpdated or barstate.islast) and not na(selectedRatio) and not na(l
 
         if not na(infoLabel)
             label.delete(infoLabel)
-        infoLabel := label.new(
-            x=bar_index,
-            y=high,
-            text=labelText,
-            style=label.style_label_down,
-            color=color.new(color.blue, 80),
-            textcolor=color.white,
-            size=size.normal
-        )
+        infoLabel := label.new(bar_index, high, labelText, style=label.style_label_down, color=color.new(color.blue, 80), textcolor=color.white, size=size.normal)
 
 // ============================================================================
 // VISUALIZATION
