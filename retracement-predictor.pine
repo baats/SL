@@ -1,0 +1,242 @@
+//@version=6
+indicator("Retracement Predictor — Quantified", overlay=true, max_lines_count=500, max_boxes_count=500, max_labels_count=500)
+
+// ============================================================================
+// INPUT PARAMETERS
+// ============================================================================
+lookbackSwings = input.int(200, "Lookback Swings", minval=10, tooltip="Number of historical swings to analyze")
+minSwingSize = input.float(10.0, "Minimum Swing Size", minval=0.1, tooltip="Minimum price distance to qualify as a swing")
+projectionType = input.string("Average", "Projection Type", options=["Average", "Median", "Percentile"])
+percentileValue = input.int(70, "Percentile Value", minval=1, maxval=99, tooltip="Used if Projection Type = Percentile")
+displayMode = input.string("Zone", "Display Mode", options=["Zone", "Lines"])
+pivotLeftBars = input.int(5, "Pivot Left Bars", minval=1)
+pivotRightBars = input.int(5, "Pivot Right Bars", minval=1)
+
+// Colors
+bullishColor = input.color(color.new(color.green, 70), "Bullish Retracement Color")
+bearishColor = input.color(color.new(color.red, 70), "Bearish Retracement Color")
+
+// ============================================================================
+// SWING DETECTION
+// ============================================================================
+// Detect swing highs and lows using pivot functions
+swingHigh = ta.pivothigh(high, pivotLeftBars, pivotRightBars)
+swingLow = ta.pivotlow(low, pivotLeftBars, pivotRightBars)
+
+// Arrays to store swing data
+var array<float> swingPrices = array.new<float>()
+var array<int> swingBars = array.new<int>()
+var array<bool> swingIsHigh = array.new<bool>()
+var array<float> retracementRatios = array.new<float>()
+
+// Track current swing state
+var float lastSwingPrice = na
+var int lastSwingBar = na
+var int lastSwingType = na  // 1 = high, 0 = low, na = none
+
+// Track projection state to avoid recreating on every bar
+var float lastProjectedRetracementHigh = na
+var float lastProjectedRetracementLow = na
+var bool projectionUpdated = false
+
+// ============================================================================
+// PROCESS NEW SWINGS
+// ============================================================================
+// Reset projection update flag
+projectionUpdated := false
+
+// Process swing high
+if not na(swingHigh)
+    currentPrice = high[pivotRightBars]
+    currentBar = bar_index - pivotRightBars
+
+    if not na(lastSwingPrice)
+        swingSize = math.abs(currentPrice - lastSwingPrice)
+
+        if swingSize >= minSwingSize
+            if array.size(swingPrices) >= 2
+                prevPrice = array.get(swingPrices, array.size(swingPrices) - 2)
+                lastPrice = array.get(swingPrices, array.size(swingPrices) - 1)
+
+                impulse = math.abs(lastPrice - prevPrice)
+                retracement = math.abs(currentPrice - lastPrice)
+
+                if impulse > 0
+                    ratio = retracement / impulse
+                    array.push(retracementRatios, ratio)
+
+                    if array.size(retracementRatios) > lookbackSwings
+                        array.shift(retracementRatios)
+
+            array.push(swingPrices, currentPrice)
+            array.push(swingBars, currentBar)
+            array.push(swingIsHigh, true)
+
+            if array.size(swingPrices) > lookbackSwings * 2
+                array.shift(swingPrices)
+                array.shift(swingBars)
+                array.shift(swingIsHigh)
+
+            lastSwingPrice := currentPrice
+            lastSwingBar := currentBar
+            lastSwingType := 1
+            projectionUpdated := true
+
+// Process swing low
+if not na(swingLow)
+    currentPrice = low[pivotRightBars]
+    currentBar = bar_index - pivotRightBars
+
+    if not na(lastSwingPrice)
+        swingSize = math.abs(currentPrice - lastSwingPrice)
+
+        if swingSize >= minSwingSize
+            if array.size(swingPrices) >= 2
+                prevPrice = array.get(swingPrices, array.size(swingPrices) - 2)
+                lastPrice = array.get(swingPrices, array.size(swingPrices) - 1)
+
+                impulse = math.abs(lastPrice - prevPrice)
+                retracement = math.abs(currentPrice - lastPrice)
+
+                if impulse > 0
+                    ratio = retracement / impulse
+                    array.push(retracementRatios, ratio)
+
+                    if array.size(retracementRatios) > lookbackSwings
+                        array.shift(retracementRatios)
+
+            array.push(swingPrices, currentPrice)
+            array.push(swingBars, currentBar)
+            array.push(swingIsHigh, false)
+
+            if array.size(swingPrices) > lookbackSwings * 2
+                array.shift(swingPrices)
+                array.shift(swingBars)
+                array.shift(swingIsHigh)
+
+            lastSwingPrice := currentPrice
+            lastSwingBar := currentBar
+            lastSwingType := 0
+            projectionUpdated := true
+
+// ============================================================================
+// STATISTICAL CALCULATIONS
+// ============================================================================
+var float selectedRatio = na
+
+if array.size(retracementRatios) > 0
+    if projectionType == "Average"
+        sum = 0.0
+        for i = 0 to array.size(retracementRatios) - 1
+            sum += array.get(retracementRatios, i)
+        selectedRatio := sum / array.size(retracementRatios)
+
+    else if projectionType == "Median"
+        sortedRatios = array.copy(retracementRatios)
+        array.sort(sortedRatios, order.ascending)
+        medianIndex = math.floor(array.size(sortedRatios) / 2)
+        selectedRatio := array.get(sortedRatios, medianIndex)
+
+    else if projectionType == "Percentile"
+        sortedRatios = array.copy(retracementRatios)
+        array.sort(sortedRatios, order.ascending)
+        percentileIndex = math.floor(array.size(sortedRatios) * percentileValue / 100)
+        percentileIndex := math.min(percentileIndex, array.size(sortedRatios) - 1)
+        selectedRatio := array.get(sortedRatios, percentileIndex)
+
+// ============================================================================
+// PROJECTION LOGIC
+// ============================================================================
+var box projectionBox = na
+var label infoLabel = na
+var line upperLine = na
+var line lowerLine = na
+
+// Only update projection when there's a new swing or on first calculation
+if (projectionUpdated or barstate.islast) and not na(selectedRatio) and not na(lastSwingPrice) and array.size(swingPrices) >= 2
+    currentSwingPrice = array.get(swingPrices, array.size(swingPrices) - 1)
+    prevSwingPrice = array.get(swingPrices, array.size(swingPrices) - 2)
+    impulse = currentSwingPrice - prevSwingPrice
+
+    retracementSize = math.abs(impulse) * selectedRatio
+
+    float retracementHigh = na
+    float retracementLow = na
+    color projectionColor = na
+
+    if impulse > 0
+        // Bearish retracement expected
+        retracementHigh := currentSwingPrice - (retracementSize * 0.8)
+        retracementLow := currentSwingPrice - (retracementSize * 1.2)
+        projectionColor := bearishColor
+    else if impulse < 0
+        // Bullish retracement expected
+        retracementLow := currentSwingPrice + (retracementSize * 0.8)
+        retracementHigh := currentSwingPrice + (retracementSize * 1.2)
+        projectionColor := bullishColor
+
+    if not na(retracementHigh) and not na(retracementLow)
+        // Store projected levels
+        lastProjectedRetracementHigh := retracementHigh
+        lastProjectedRetracementLow := retracementLow
+
+        if displayMode == "Zone"
+            // Delete old box and create new one
+            if not na(projectionBox)
+                box.delete(projectionBox)
+            projectionBox := box.new(
+                left=bar_index,
+                top=retracementHigh,
+                right=bar_index + 50,
+                bottom=retracementLow,
+                border_color=projectionColor,
+                bgcolor=projectionColor,
+                border_width=1,
+                extend=extend.right
+            )
+        else
+            // Delete old lines and create new ones
+            if not na(upperLine)
+                line.delete(upperLine)
+            if not na(lowerLine)
+                line.delete(lowerLine)
+            upperLine := line.new(
+                x1=bar_index,
+                y1=retracementHigh,
+                x2=bar_index + 50,
+                y2=retracementHigh,
+                color=projectionColor,
+                width=2,
+                extend=extend.right
+            )
+            lowerLine := line.new(
+                x1=bar_index,
+                y1=retracementLow,
+                x2=bar_index + 50,
+                y2=retracementLow,
+                color=projectionColor,
+                width=2,
+                extend=extend.right
+            )
+
+        // Create/update label
+        ratioPercent = selectedRatio * 100
+        labelText = "Expected Retrace: ~" + str.tostring(ratioPercent, "#.#") + "% (" + projectionType + ") | Samples: " + str.tostring(array.size(retracementRatios))
+
+        if not na(infoLabel)
+            label.delete(infoLabel)
+        infoLabel := label.new(
+            x=bar_index,
+            y=high,
+            text=labelText,
+            style=label.style_label_down,
+            color=color.new(color.blue, 80),
+            textcolor=color.white,
+            size=size.normal
+        )
+
+// ============================================================================
+// VISUALIZATION
+// ============================================================================
+plotshape(swingHigh, "Swing High", shape.triangledown, location.abovebar, color.red, offset=-pivotRightBars, size=size.tiny)
+plotshape(swingLow, "Swing Low", shape.triangleup, location.belowbar, color.green, offset=-pivotRightBars, size=size.tiny)
