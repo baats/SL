@@ -152,8 +152,8 @@ var label infoLabel = na
 var line upperLine = na
 var line lowerLine = na
 
-// Only update projection when there's a new swing or on first calculation
-if (projectionUpdated or barstate.islast) and not na(selectedRatio) and not na(lastSwingPrice) and array.size(swingPrices) >= 2
+// Continuously project from the most recent swing
+if not na(selectedRatio) and not na(lastSwingPrice) and array.size(swingPrices) >= 2
     currentSwingPrice = array.get(swingPrices, array.size(swingPrices) - 1)
     prevSwingPrice = array.get(swingPrices, array.size(swingPrices) - 2)
     impulse = currentSwingPrice - prevSwingPrice
@@ -165,12 +165,12 @@ if (projectionUpdated or barstate.islast) and not na(selectedRatio) and not na(l
     color projectionColor = na
 
     if impulse > 0
-        // Bearish retracement expected
+        // Bearish retracement expected from the swing high
         retracementHigh := currentSwingPrice - (retracementSize * 0.8)
         retracementLow := currentSwingPrice - (retracementSize * 1.2)
         projectionColor := bearishColor
     else if impulse < 0
-        // Bullish retracement expected
+        // Bullish retracement expected from the swing low
         retracementLow := currentSwingPrice + (retracementSize * 0.8)
         retracementHigh := currentSwingPrice + (retracementSize * 1.2)
         projectionColor := bullishColor
@@ -180,27 +180,33 @@ if (projectionUpdated or barstate.islast) and not na(selectedRatio) and not na(l
         lastProjectedRetracementHigh := retracementHigh
         lastProjectedRetracementLow := retracementLow
 
-        if displayMode == "Zone"
-            // Delete old box and create new one
-            if not na(projectionBox)
-                box.delete(projectionBox)
-            projectionBox := box.new(bar_index, retracementHigh, bar_index + 50, retracementLow, border_color=projectionColor, bgcolor=projectionColor, border_width=1, extend=extend.right)
-        else
-            // Delete old lines and create new ones
-            if not na(upperLine)
-                line.delete(upperLine)
-            if not na(lowerLine)
-                line.delete(lowerLine)
-            upperLine := line.new(bar_index, retracementHigh, bar_index + 50, retracementHigh, color=projectionColor, width=2, extend=extend.right)
-            lowerLine := line.new(bar_index, retracementLow, bar_index + 50, retracementLow, color=projectionColor, width=2, extend=extend.right)
+        // Only redraw on new swings or last bar to avoid creating too many objects
+        if projectionUpdated or barstate.islast
+            if displayMode == "Zone"
+                // Delete old box and create new one
+                if not na(projectionBox)
+                    box.delete(projectionBox)
+                projectionBox := box.new(bar_index, retracementHigh, bar_index + 50, retracementLow, border_color=projectionColor, bgcolor=projectionColor, border_width=1, extend=extend.right)
+            else
+                // Delete old lines and create new ones
+                if not na(upperLine)
+                    line.delete(upperLine)
+                if not na(lowerLine)
+                    line.delete(lowerLine)
+                upperLine := line.new(bar_index, retracementHigh, bar_index + 50, retracementHigh, color=projectionColor, width=2, extend=extend.right)
+                lowerLine := line.new(bar_index, retracementLow, bar_index + 50, retracementLow, color=projectionColor, width=2, extend=extend.right)
 
-        // Create/update label
-        ratioPercent = selectedRatio * 100
-        labelText = "Expected Retrace: ~" + str.tostring(ratioPercent, "#.#") + "% (" + projectionType + ") | Samples: " + str.tostring(array.size(retracementRatios))
+            // Create/update label
+            ratioPercent = selectedRatio * 100
+            labelText = "Expected Retrace: ~" + str.tostring(ratioPercent, "#.#") + "% (" + projectionType + ") | Samples: " + str.tostring(array.size(retracementRatios))
 
-        if not na(infoLabel)
-            label.delete(infoLabel)
-        infoLabel := label.new(bar_index, high, labelText, style=label.style_label_down, color=color.new(color.blue, 80), textcolor=color.white, size=size.normal)
+            if not na(infoLabel)
+                label.delete(infoLabel)
+            infoLabel := label.new(bar_index, high, labelText, style=label.style_label_down, color=color.new(color.blue, 80), textcolor=color.white, size=size.normal)
+
+// Plot the projection levels for historical visibility
+plot(lastProjectedRetracementHigh, "Projected High", color=color.new(color.blue, 50), linewidth=1, style=plot.style_linebr)
+plot(lastProjectedRetracementLow, "Projected Low", color=color.new(color.orange, 50), linewidth=1, style=plot.style_linebr)
 
 // ============================================================================
 // VISUALIZATION
